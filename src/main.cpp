@@ -12,18 +12,28 @@
 #define TF_SCK_PIN PB3
 #define TF_CS_PIN PA15
 
-bool on_off = 0;
-int open_num=114514;
-String Name = "666"; 
-bool fe;
+int open_num= 114514;
 int num;
+bool fe;
+bool on_off = 0;
+
+String Name = "666"; 
+String Name_num[100] = {};
 
 File TF;
 File config;
+File Run_log;
 SdFat SD;
 static SPIClass mySPI2(TF_MOSI_PIN,TF_MISO_PIN,TF_SCK_PIN,TF_CS_PIN);
 #define SD2_CONFIG SdSpiConfig(TF_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(18), &mySPI2)
 #define first_open EEPROM.read(9)
+
+void BUZZER_ERR(){
+    tone(BUZZER_PIN,988);
+    delay(3000);
+    noTone(BUZZER_PIN);
+    digitalWrite(BUZZER_PIN,LOW);
+}
 
 void LED(bool on_off){
     if(on_off){
@@ -33,13 +43,18 @@ void LED(bool on_off){
         digitalWrite(LED_PIN,0x0);
     }
 }
-void setup(){
-    Serial.begin(115200);
-    EEPROM.begin();
-    pinMode(BUZZER_PIN,OUTPUT);
-    pinMode(LED_PIN,OUTPUT);
-    pinMode(PB11,INPUT);
-    pinMode(TF_CS_PIN,OUTPUT);
+
+void TF_init(){
+    if(!SD.begin(SD2_CONFIG)){
+        Serial.println("no!");
+        BUZZER_ERR();
+    }
+    else{
+        Serial.println("yes!");
+    }
+}
+
+void BUZZER_OPEN(){
     tone(BUZZER_PIN,532);
     delay(100);
     tone(BUZZER_PIN,587);
@@ -47,10 +62,29 @@ void setup(){
     tone(BUZZER_PIN,659);
     delay(300);
     noTone(BUZZER_PIN);
+    digitalWrite(BUZZER_PIN,LOW);
+}
+
+void PIN_init(){
+    pinMode(BUZZER_PIN,OUTPUT);
+    pinMode(LED_PIN,OUTPUT);
+    pinMode(PB11,INPUT);
+    pinMode(TF_CS_PIN,OUTPUT);
+}
+
+void setup(){
+    Serial.begin(115200);
+    EEPROM.begin();
+    PIN_init();
+    BUZZER_OPEN();
+    TF_init();
+
+    Run_log = SD.open("Run_log.txt");
     if(!(first_open == 88)){
         EEPROM.write(9,88);
         EEPROM.write(0,1);
         Serial.println("eeprom.write:9_88/0_1");
+        Run_log.println("eeprom.write:9_88/0_1");
     }
     else{
         open_num = EEPROM.read(0);
@@ -58,23 +92,15 @@ void setup(){
         String out1 = String(open_num);
         String out2 = String(open_num+1);
         Serial.println("eeprom.read:0_" + out1 + "\neeprom.write:0_" + out2);
+        Run_log.println("eeprom.read:0_" + out1 + "\neeprom.write:0_" + out2);
     }
-
-    if(!SD.begin(SD2_CONFIG)){
-        Serial.println("no!");
-        tone(BUZZER_PIN,988);
-        delay(3000);
-        noTone(BUZZER_PIN);
-    }
-    else{
-        Serial.println("yes!");
-    }
-
+    Run_log.close();
 
     config = SD.open("config.ini");
     if (!config) {
         Serial.println("Error opening config.ini");
-        return;
+        BUZZER_ERR();
+        return ;
     }
     Serial.println("Reading config.ini:");
     while (config.available()) {
@@ -101,18 +127,29 @@ void setup(){
     }
     config.close();
     Serial.println(Name);
+
+    int i=0;
+    while (1) {
+        File WENJIAN = WENJIAN.openNextFile();
+        if (!WENJIAN) {
+            break;
+        }
+        Name_num[i] = WENJIAN.name();
+        i++;
+    }
+
+
     TF = SD.open(Name + ".csv", FILE_WRITE);
     if(TF){
         tone(BUZZER_PIN,659);
         delay(100);
         noTone(BUZZER_PIN);
+        digitalWrite(BUZZER_PIN,LOW);
     }
-    else {
-        tone(BUZZER_PIN,988);
-        delay(1000);
-        noTone(BUZZER_PIN);
+    else{
+        BUZZER_ERR();
     }
-    TF.println("");
+    TF.println("创建成功");
     TF.close();
 }
 
